@@ -11,12 +11,20 @@ const char NULL_T = 6;
 
 
 struct jsonObj {
+    struct jsonArray {
+        int arrayType;
+        int length;
+        struct jsonObj* objValues;
+        char* stringValues;
+        int* intValues;
+    };
     struct jsonKeyValue {
         int type;
         char* key;
         struct jsonObj* objValue;
         char* stringValue;
         int intValue;
+        struct jsonArray* arrayValue;
     };
     int dataCount;
     int dataCapacity;
@@ -31,18 +39,20 @@ int billigPow(int exp, int base){
     return result;
 }
 
-int findClosingBracket(int currentlyOpenBrackets, char json[]){
+int findClosingBracket(int currentlyOpenBrackets, int start, char json[]){
     int length = 0;
     for(; json[length] != '\0'; length++){
         
     }
     int openBrack = currentlyOpenBrackets;
-    for(int i = length-1; i > 0; i--){
+    for(int i = start; i < length; i++){
         if(json[i] == '}'){
             if(openBrack == 1){
                 return i;
             }
             openBrack--;
+        }else if(json[i] == '{'){
+            openBrack++;
         }
     }
     return -1;
@@ -91,6 +101,26 @@ void printObj(struct jsonObj* parsedObj, int depth){
 
             free(parsedObj->data[i].key);
             free(parsedObj->data[i].stringValue);
+        }else if(parsedObj->data[i].type == ARRAY){
+
+            printf("%s\"%s\" : [", indentation, parsedObj->data->key);
+            struct jsonArray* arr = parsedObj->data[i].arrayValue;
+            for(int j = 0; j < arr->length; j++){
+                if(arr->arrayType == OBJ){
+                    printObj(&arr->objValues[j], depth);
+                }else {
+                    printf("array type not yet implemented\n");
+                }
+                if (j + 1 < arr->length){
+                    printf(",");
+                }
+            }
+            printf("%s]", indentation);
+            if (i + 1 < dataCount){
+                printf(",\n");
+            }else{
+                printf("\n");
+            }
         }
        
     }
@@ -102,39 +132,11 @@ void printObj(struct jsonObj* parsedObj, int depth){
     }
 }
 
-struct jsonObj* parseObj(char* json, int start, int end){
-
-}
-
-int main(){
-    //char json[] = "{ \"arrayKey\": [1, 2, 3 , 4], \"stringInString\": \"bo\\\"test\\\"\" ,\"nullkey\": null, \"key3\": 1234, \"key4\": true,\"key5\":false, \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": {\"subsubkey1\": 12}}}";
-
-    //char json[] = "{ \"arrayKey\": [1, 2, 3 , 4] }";
-    char json[] = "{ \"numkey\": 123,  \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": { \"subsubkey1\": \"sval 3\" } } }";
-    
+int parseObj(char* json, struct jsonObj* result, int start, int end){
+    result->dataCapacity = 0;
+    result->dataCount = 0;
     
     int openBracketCount = 0;
-    for(int i = 0; json[i] != '\0'; i++){
-        char currentChar = json[i];
-        if(currentChar == '{'){
-            openBracketCount++;
-        }else if(currentChar == '}'){
-            openBracketCount--;
-        }
-    }
-
-    if(openBracketCount != 0){
-        printf("json invalid: bracket count mismatch\n");
-        return 1;
-    }else{
-        printf("json valid\n");
-    }
-
-    struct jsonObj parsedObj;
-    parsedObj.dataCapacity = 0;
-    parsedObj.dataCount = 0;
-    
-    openBracketCount = 0;
     int parseState = 0;
 
     int maxObjDepth = 100;
@@ -142,21 +144,22 @@ int main(){
     struct jsonObj* objs[maxObjDepth];
     int depth = 0;
     int inArray = 1;
-    objs[0] = &parsedObj;
+    objs[0] = result;
 
     
     for(int i = 0; i < maxObjDepth; i++){
         objEnds[i] = -1;
-    } 
-     
-    for(int i = 0; json[i] != '\0'; i++){
+    }
+
+    for(int i = start; (end == -1 || i < end)  && json[i] != '\0'; i++){
+        printf("i=%d\n", i);
         char currentChar = json[i];
         if(parseState == 0){
             if(currentChar == ' ' || currentChar == '}'){
                 //ignore
             } else if(currentChar == '{'){
                 openBracketCount++;
-                objEnds[depth] = findClosingBracket(openBracketCount, json);
+                objEnds[depth] = findClosingBracket(openBracketCount, i+1, json);
                 if(objEnds[depth] != -1){
                     printf("Found closing bracket at %d\n",objEnds[depth]);
                     parseState = 1;
@@ -266,6 +269,12 @@ int main(){
                 parseState=0;
                 i--;
             } else if(currentChar == '['){
+                objs[depth]->data[objs[depth]->dataCount-1].type = ARRAY;
+                
+                struct jsonArray* jsonArray = malloc(sizeof(struct jsonArray));
+                jsonArray->length = 0;
+                objs[depth]->data[objs[depth]->dataCount-1].arrayValue = jsonArray;  
+
                 printf("Found array start at %d\n", i);
                 int arrayEnd = -1;
                 for(int j = i; j < objEnds[depth] && arrayEnd == -1; j++){
@@ -285,13 +294,65 @@ int main(){
                 printf("Found array: %s\n", string);
                 printf("Array ends at %d\n", arrayEnd);
                 inArray = 1;
-                for (int j = i; j < arrayEnd; j++)
-                {
-                    if (json[i] == '{')
-                    {
-                        arrayEnd = j;
+                
+                int arrayType = -1;
+                
+                for(int j = i; j < arrayEnd && arrayType == -1; j++){
+                    if(json[j] == '{'){
+                        printf("array is object type\n");
+                        arrayType = OBJ;
+                    } else if(json[j] >= '0' && json[j] <= '9'){
+                        printf("array is int type\n");
+                        arrayType = INT;
+                    } else if(json[j] == '"'){
+                        printf("array is string type\n");
+                        arrayType = STRING;
                     }
                 }
+            
+                if(arrayType == OBJ){
+                    int lenght = 0;
+                    for (int j = i; j < arrayEnd; j++)
+                    {
+                        if (json[j] == '{')
+                        {
+                            int index = findClosingBracket(openBracketCount , j+1, json);
+                            j = index;                        
+                            lenght++;
+                        }
+                    } 
+                    printf("array has length %d\n", lenght);
+                    if(lenght > 0){
+                        struct jsonObj* objectsMem = malloc(sizeof(struct jsonObj) * lenght);
+                        jsonArray->length = lenght;
+                        jsonArray->objValues = objectsMem;
+                        jsonArray->arrayType = OBJ;                     
+                        int count = 0; 
+                        for (int j = i; j < arrayEnd; j++)
+                        {
+                            if (json[j] == '{')
+                            {
+                                printf("parsing obj in array\n");
+                                int index = findClosingBracket(openBracketCount , j+1, json);
+                                printf("obj ends at index %d\n", index);
+                                printf("obj is:\n");
+                                char objstring[index - j];
+                                char *stringP = objstring;
+                                char *jsonP = json;
+                                cpChars(j, index+1, jsonP, stringP);
+                                printf("%s\n", stringP);
+                                int returnCode = parseObj(json, &objectsMem[count], j, index+1);
+                                if(returnCode == -1){
+                                    return returnCode;
+                                }
+                                printf("parsed array obj success\n");
+                                count++;
+                                j = index;                        
+                            }
+                        }
+                    }
+                }
+                
                 i = arrayEnd;
                 parseState = 4;
             } else if(currentChar == '"'){
@@ -317,10 +378,11 @@ int main(){
                     }
                 }
                 if(stringStart != -1 && stringEnd != -1){
-                    int size = stringEnd - stringStart;
+                    int size = stringEnd - (stringStart+1);
                     char *string = malloc(sizeof(char) * size);
                     char *jsonP = json;
                     cpChars(stringStart + 1, stringEnd, jsonP, string);
+                    string[size] = '\0';
                     printf("Found string: %s\n", string);
                     struct jsonObj* parsedObj = objs[depth];
                     parsedObj->data[parsedObj->dataCount - 1].type = STRING;
@@ -443,6 +505,40 @@ int main(){
             }
         }
     }
+}
+
+int main(){
+    //char json[] = "{ \"arrayKey\": [1, 2, 3 , 4], \"stringInString\": \"bo\\\"test\\\"\" ,\"nullkey\": null, \"key3\": 1234, \"key4\": true,\"key5\":false, \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": {\"subsubkey1\": 12}}}";
+
+    char json[] = "{ \"arrayKey\": [{\"subkey\": \"3\"}, {\"subkey2\": \"4\"}, {\"subkey3\": \"5\"}] }";
+    //char json[] = "{ \"numkey\": 123,  \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": { \"subsubkey1\": \"sval 3\" } } }";
+    
+    
+    int openBracketCount = 0;
+    for(int i = 0; json[i] != '\0'; i++){
+        char currentChar = json[i];
+        if(currentChar == '{'){
+            openBracketCount++;
+        }else if(currentChar == '}'){
+            openBracketCount--;
+        }
+    }
+
+    if(openBracketCount != 0){
+        printf("json invalid: bracket count mismatch\n");
+        return 1;
+    }else{
+        printf("json valid\n");
+    }
+    char* jsonP = json;
+    struct jsonObj parsedObj;
+
+    int returnCode = parseObj(jsonP, &parsedObj, 0, -1);
+    if(returnCode != 0){
+        //todo free parsed obj
+        return returnCode;
+    } 
+
     if(parsedObj.data != 0){
         printf("Printing parsed json\n");
         printObj(&parsedObj, 0);
