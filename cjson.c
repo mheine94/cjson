@@ -369,12 +369,12 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                         //printf("Copying %d elements\n", parsedObj->dataCount);
                         for (int j = 0; j < parsedObj->dataCount; j++)
                         {
-                            struct JsonKeyValue kvValue;
-                            keyValue.type = oldDataP[j].type;
-                            kvValue.key = oldDataP[j].key;
-                            kvValue.stringValue = oldDataP[j].stringValue;
-                            kvValue.objValue = oldDataP[j].objValue;
-                            dataP[j] = kvValue;
+                            dataP[j].type =  oldDataP[j].type;
+                            dataP[j].key =  oldDataP[j].key;
+                            dataP[j].stringValue  = oldDataP[j].stringValue; 
+                            dataP[j].objValue  = oldDataP[j].objValue; 
+                            dataP[j].arrayValue  = oldDataP[j].arrayValue;
+                            dataP[j].intValue  = oldDataP[j].intValue;
                         }
                         free(oldDataP);
                         parsedObj->dataCapacity = newCapacity;
@@ -770,7 +770,6 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
                 i = numEnd-1;
             } else if(currentChar == 't'){
-                objs[depth]->data[objs[depth]->dataCount-1].type = BOOL;
                 int hasR = json[i+1] != '\0' && json[i+1] == 'r';
                 int hasU = json[i+2] != '\0' && json[i+2] == 'u';
                 int hasE = json[i+3] != '\0' && json[i+3] == 'e';
@@ -780,12 +779,12 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 }
                 struct JsonObj* currentObj = objs[depth];
                 currentObj->data[currentObj->dataCount-1].intValue = 1;
+                currentObj->data[currentObj->dataCount-1].type = BOOL;
                 //printf("Found boolean true\n");
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
                 i = i+3;
                 
             }else if(currentChar == 'f'){
-                objs[depth]->data[objs[depth]->dataCount-1].type = BOOL;
                 int hasA = json[i+1] != '\0' && json[i+1] == 'a';
                 int hasL = json[i+2] != '\0' && json[i+2] == 'l';
                 int hasS = json[i+3] != '\0' && json[i+3] == 's';
@@ -796,6 +795,7 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 }
                 struct JsonObj* currentObj = objs[depth];
                 currentObj->data[currentObj->dataCount-1].intValue = 0;
+                currentObj->data[currentObj->dataCount-1].type = BOOL;
                 //printf("Found boolean false\n");
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
                 i = i+4;
@@ -839,10 +839,10 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
 }
 
 int main(){
-    char json1[] = "{ \"stringInString\": \"bo\\\"test\\\"\" , \"key2\": null, \"key3\": 1234, \"key4\": true,\"key5\": false}";//, \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": {\"subsubkey1\": 12}}}";
+    char json1[] = "{ \"stringInString\": \"out\\\"in\\\"\" , \"key2\": null, \"key3\": 1234, \"key4\": true,\"key5\": false, \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": {\"subsubkey1\": 12}}}";
     char json2[] = "{ \"arrayKey\": [\"stringval1\", \"stringval2\"] , \"key2\": 2}";
     char json3[] = "{ \"numkey\": 123,  \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": { \"subsubkey1\": \"sval 3\" } } }";
-    char json4[] = "{ \"key\": [ 1, 2, 3] }";  
+    char json4[] = "{ \"key\": [ 1, 2, 3] }";
     char json5[] = "{ \"key\": [ null, null, null] }";  
     
     char* jsonP[] = { json1, json2, json3, json4, json5};
