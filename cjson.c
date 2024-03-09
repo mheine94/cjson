@@ -94,19 +94,34 @@ void printObj(struct JsonObj* parsedObj, int depth){
             free(parsedObj->data[i].key);
             free(parsedObj->data[i].objValue);
         }else if(parsedObj->data[i].type == INT){
-            printf("%s\"%s\" : %d\n",indentation, parsedObj->data[i].key, parsedObj->data[i].intValue);
+            printf("%s\"%s\" : %d",indentation, parsedObj->data[i].key, parsedObj->data[i].intValue);
+            if (i + 1 < dataCount){
+                printf(",\n");
+            }else{
+                printf("\n");
+            }
         }else if(parsedObj->data[i].type == BOOL){
             if(parsedObj->data[i].intValue == 1){
-                printf("%s\"%s\" : true\n",indentation, parsedObj->data[i].key);
+                printf("%s\"%s\" : true",indentation, parsedObj->data[i].key);
             }
             else if (parsedObj->data[i].intValue == 0){
-                printf("%s\"%s\" : false\n",indentation, parsedObj->data[i].key);
+                printf("%s\"%s\" : false",indentation, parsedObj->data[i].key);
             }else
             {
                 printf("ERROR: unknown bool value %d", parsedObj->data[i].intValue);
             }
+            if (i + 1 < dataCount){
+                printf(",\n");
+            }else{
+                printf("\n");
+            }
         }else if(parsedObj->data[i].type == NULL_T){
-            printf("%s\"%s\" : null\n", indentation, parsedObj->data[i].key);
+            printf("%s\"%s\" : null", indentation, parsedObj->data[i].key);
+            if (i + 1 < dataCount){
+                printf(",\n");
+            }else{
+                printf("\n");
+            }
         }else if (parsedObj->data[i].type == STRING) {
             printf("%s\"%s\" : \"%s\"", indentation, parsedObj->data[i].key, parsedObj->data[i].stringValue);
             if (i + 1 < dataCount){
@@ -136,11 +151,12 @@ void printObj(struct JsonObj* parsedObj, int depth){
                     }
                 }else if(arr->arrayType == INT) {
                     printf("%d", arr->intValues[j]);
-                }else if(arr->arrayType == NULL_T) {
+                } else if (arr->arrayType == NULL_T){
                     printf("null");
-                }else {
+                } else {
                     printf("ERROR: array type not yet implemented");
                 }
+
                 if (j + 1 < arr->length){
                     printf(",");
                 }
