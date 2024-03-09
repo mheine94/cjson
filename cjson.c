@@ -46,13 +46,9 @@ int billigPow(int exp, int base){
     return result;
 }
 
-int findClosingBracket(int currentlyOpenBrackets, int start, char json[]){
-    int length = 0;
-    for(; json[length] != '\0'; length++){
-        
-    }
+int findClosingBracket(int currentlyOpenBrackets, int start, char* json){
     int openBrack = currentlyOpenBrackets;
-    for(int i = start; i < length; i++){
+    for(int i = start; json[i] != '\0'; i++){
         if(json[i] == '}'){
             if(openBrack == 1){
                 return i;
@@ -62,6 +58,7 @@ int findClosingBracket(int currentlyOpenBrackets, int start, char json[]){
             openBrack++;
         }
     }
+    printf("ERROR: did not find closing bracket of { at %d\n", start);
     return -1;
 }
 
@@ -121,7 +118,7 @@ void printObj(struct JsonObj* parsedObj, int depth){
             free(parsedObj->data[i].key);
             free(parsedObj->data[i].stringValue);
         }else if(parsedObj->data[i].type == ARRAY){
-            printf("%s\"%s\" : [ ", indentation, parsedObj->data->key);
+            printf("%s\"%s\" : [ ", indentation, parsedObj->data[i].key);
             struct JsonArray* arr = parsedObj->data[i].arrayValue;
             for(int j = 0; j < arr->length; j++){
                 if(arr->arrayType == OBJ){
@@ -163,7 +160,7 @@ void printObj(struct JsonObj* parsedObj, int depth){
     }
 }
 struct ParseStringResult {
-    int length;
+    int end;
     char* string;
     int returnCode;
 };
@@ -193,18 +190,18 @@ struct ParseStringResult parseString(char* json, int start, int end){
         }
     }
     if(stringStart != -1 && stringEnd != -1){
-        int size = stringEnd - (stringStart+1);
-        resultObj.length = size;
+        int size = stringEnd - stringStart;
+        resultObj.end = stringEnd;
         char *string = malloc(sizeof(char) * size);
         char *jsonP = json;
         cpChars(stringStart + 1, stringEnd, jsonP, string);
-        string[size] = '\0';
-        //printf("Found string: %s\n", string);
+        string[size-1] = '\0';
+       
         resultObj.string = string;
         return resultObj; 
     }else {
         printf("Error: did not find closing \" of \" at i=%d\n", start);
-        resultObj.returnCode = -1;
+        resultObj.returnCode = 1;
         return resultObj;
     }
 }
@@ -212,7 +209,7 @@ struct ParseStringResult parseString(char* json, int start, int end){
 struct ParseIntResult {
     int parsedNumber;
     int returnCode;
-    int length;
+    int end;
 };
 
 struct ParseIntResult parseInt(char* json, int start, int end){
@@ -289,7 +286,7 @@ struct ParseIntResult parseInt(char* json, int start, int end){
     //printf("Parsed number is: %d\n", parsedNumber);
     struct ParseIntResult result;
     result.parsedNumber = parsedNumber;
-    result.length = numLen;
+    result.end = numEnd;
     result.returnCode = 0;
     return result;
 }
@@ -312,7 +309,7 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
         objEnds[i] = -1;
     }
 
-    for(int i = start; (end == -1 || i < end)  && json[i] != '\0'; i++){
+    for(int i = start;  i < end && json[i] != '\0'; i++){
         char currentChar = json[i];
         if(parseState == STATE_FIND_OPENING_BRACKET){
             if(currentChar == ' ' || currentChar == '}'){
@@ -325,6 +322,7 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                     parseState = STATE_PARSE_NAME;
                 }else{
                     printf("Error: did not find the closing bracket of i=%d\n", i);
+                    return 1;
                 }
             } else {
                 printf("Error: unexpected char %c at i=%d\n", currentChar, i);
@@ -355,8 +353,7 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 cpChars(nameStart + 1, nameEnd, jsonP, mem);
                 mem[size - 1] = '\0';
                 //printf("Found name: %s\n", mem);
-                struct JsonKeyValue keyValue;
-                keyValue.key = mem;
+             
                 struct JsonObj *parsedObj = objs[depth];
                 if (parsedObj->dataCount + 1 > parsedObj->dataCapacity)
                 {
@@ -388,13 +385,15 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                         parsedObj->dataCount = 0;
                     }
                 }
-                parsedObj->data[parsedObj->dataCount++] = keyValue;
+                parsedObj->data[parsedObj->dataCount].key = mem;
+                parsedObj->dataCount+=1;
                 parseState = STATE_FIND_COLON;
                 i = nameEnd;
             }
             else
             {
                 printf("Error: did not find closing \" of \" at i=%d\n", i);
+                return 1;
             }
         }
         else if (parseState == STATE_FIND_COLON)
@@ -561,7 +560,7 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                                 //printf("String is: %s\n", res.string);
                                 stringArray[count] = res.string;
                                 count++;
-                                j += res.length;
+                                j = res.end;
                                 searchComma = 1;
                             }
                         }
@@ -637,7 +636,7 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                                 }
                                 jsonArray->intValues[count] = result.parsedNumber;
                                 count++;
-                                j += result.length;
+                                j = result.end;
                             }
                         }
                     }
@@ -679,43 +678,17 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 i = arrayEnd;
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
             } else if(currentChar == '"'){
-                int stringStart = -1;
-                int stringEnd = -1;
-                for(int j = i; j < objEnds[depth] && stringEnd == -1; j++){
-                    if(json[j] == ' '){
-                        // ignore
-                    }
-                    else if (json[j] == '"' && stringStart == -1)
-                    {
-                        // parse string
-                        stringStart = j;
-                    }
-                    else if (j > 0 && json[j - 1] == '\\')
-                    {
-                        //printf("Found escape character \\ \n");
-                    }
-                    else if (json[j] == '"')
-                    {
-                        stringEnd = j;
-                        //printf("Found string value from %d to %d\n", stringStart, stringEnd);
-                    }
+                struct ParseStringResult result = parseString(json, i, objEnds[depth]); 
+                if(result.returnCode != 0){
+                    return result.returnCode;
                 }
-                if(stringStart != -1 && stringEnd != -1){
-                    int size = stringEnd - (stringStart+1);
-                    char *string = malloc(sizeof(char) * size);
-                    char *jsonP = json;
-                    cpChars(stringStart + 1, stringEnd, jsonP, string);
-                    string[size] = '\0';
-                    //printf("Found string: %s\n", string);
-                    struct JsonObj* parsedObj = objs[depth];
-                    parsedObj->data[parsedObj->dataCount - 1].type = STRING;
-                    parsedObj->data[parsedObj->dataCount - 1].stringValue = string;
-                    parsedObj->data[parsedObj->dataCount - 1].objValue = 0;
-                    parseState = STATE_FIND_COMMA_OR_OBJ_END;
-                    i = stringEnd;
-                }else {
-                    printf("Error: did not find closing \" of \" at i=%d\n", i);
-                }
+                struct JsonObj* parsedObj = objs[depth];
+                parsedObj->data[parsedObj->dataCount - 1].type = STRING;
+                parsedObj->data[parsedObj->dataCount - 1].stringValue = result.string;
+                parsedObj->data[parsedObj->dataCount - 1].objValue = 0;
+
+                parseState = STATE_FIND_COMMA_OR_OBJ_END;
+                i = result.end;
             } else if(currentChar >= '0' && currentChar <= '9'){
                 objs[depth]->data[objs[depth]->dataCount-1].type = INT;
                 //printf("Parsing number at %d\n", i);
@@ -836,6 +809,7 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
             }
         }
     }
+    return 0;
 }
 
 int main(){
@@ -846,20 +820,39 @@ int main(){
     char json5[] = "{ \"key\": [ null, null, null] }";  
     
     char* jsonP[] = { json1, json2, json3, json4, json5};
-     
-    for(int i = 0; i < 5; i++){
-        struct JsonObj parsedObj;
-        int returnCode = parseObj(jsonP[i], &parsedObj, 0, -1);
-        if(returnCode != 0){
-            //todo free parsed obj
-            return returnCode;
-        }    
-     
-        if(parsedObj.data != 0){
-            printf("Printing parsed json %d\n", i);
-            printObj(&parsedObj, 0);
-            printf("\n");
+    int bufferSize = 100;
+    char* buffer = malloc(sizeof(char) * bufferSize);
+    char nextChar;
+    int charCount = 0;
+   
+    while(fread(&nextChar, sizeof(char), 1,  stdin) > 0){ 
+        buffer[charCount] = nextChar;
+        charCount++;
+        if(charCount+1 > bufferSize){
+            int newBufferSize = bufferSize * 2;
+            char* newBuffer = malloc(sizeof(char)* newBufferSize);
+            for(int i = 0; i < bufferSize; i++){
+                newBuffer[i] = buffer[i];
+            }
+            free(buffer);
+            buffer = newBuffer;
+            bufferSize = newBufferSize;
         }
-    } 
+    }
+    buffer[charCount] = '\0';
+
+    //printf("got json: \"%s\"", buffer);
+    
+    struct JsonObj parsedObj;
+    int returnCode = parseObj(buffer, &parsedObj, 0, charCount);
+    if(returnCode != 0){
+        //todo free parsed obj
+        return returnCode;
+    }    
+    
+    if(parsedObj.data != 0){
+        printObj(&parsedObj, 0);
+        printf("\n");
+    }
     return 0;
 }
