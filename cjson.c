@@ -133,7 +133,7 @@ void writeChar(struct JsonString* jsonString, char c){
     }
     jsonString->string[jsonString->length] = c;
     jsonString->length++;
-    printf("%c", c);
+    //printf("%c", c);
 }
 
 void writeString(struct JsonString* jsonString, char* string){
@@ -783,6 +783,7 @@ struct ParseValueResult parseValue(char* json, int start, int end){
             } else if(currentChar == '}'){
                 // ignore
                 result.end = i;
+                return result;
             } else{
                 printf("Error: unexpected char %c at i=%d\n", currentChar, i);
                 result.returnCode = 1;
