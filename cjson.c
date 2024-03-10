@@ -33,8 +33,6 @@ struct JsonObj {
         int type;
         char* key;
         struct JsonValue* objValue;
-        struct JsonValue* stringValue;
-        int* intValue;
         struct JsonValue* arrayValue;
     };
         int dataCount;
@@ -80,24 +78,15 @@ void freeObj(struct JsonObj* parsedObj){
     int dataCount = parsedObj->dataCount;
     for (int i = 0; i < dataCount; i++)
     {
-        if (parsedObj->data[i].type == OBJ)
+        if (parsedObj->data[i].type != ARRAY)
         {
             free(parsedObj->data[i].key);
             free(parsedObj->data[i].objValue->value);
             free(parsedObj->data[i].objValue);
-        }else if (parsedObj->data[i].type == STRING) {
-            free(parsedObj->data[i].key);
-            free(parsedObj->data[i].stringValue);
-        }else if (parsedObj->data[i].type == INT) {
-            free(parsedObj->data[i].intValue);
         }else if(parsedObj->data[i].type == ARRAY){
             struct JsonArray* arr = parsedObj->data[i].arrayValue->value;
             for(int j = 0; j < arr->length; j++){
-                if(arr->arrayType == OBJ){
-                    freeObj(&arr->objValues[j]);
-                }else if(arr->arrayType == STRING) {
-                    free(arr->stringValues[j]);
-                }
+                freeObj(&arr->objValues[j]);
            }
             free(parsedObj->data[i].key);
             free(arr);
@@ -192,12 +181,12 @@ void writeKeyValue(struct JsonString* jsonString, struct JsonKeyValue* kv){
         writeObj(jsonString, kv->objValue->value);
    } else if(kv->type == STRING){
         writeChar(jsonString, '"');
-        writeString(jsonString, kv->stringValue->value);
+        writeString(jsonString, kv->objValue->value);
         writeChar(jsonString, '"');
    } else if(kv->type == BOOL){
-        writeBool(jsonString, *kv->intValue);
+        writeBool(jsonString, *((int *) kv->objValue->value));
     } else if(kv->type == INT){
-        writeInt(jsonString, *kv->intValue);
+        writeInt(jsonString, *((int *) kv->objValue->value));
    } else if(kv-> type == NULL_T){
         char nullString[] = "null";
         writeString(jsonString, (char *) &nullString);
@@ -247,21 +236,21 @@ void printObj(struct JsonObj* parsedObj, int depth){
             printObj(parsedObj->data[i].objValue->value, depth);
             printf("%s}\n", indentation);
         }else if(parsedObj->data[i].type == INT){
-            printf("%s\"%s\" : %d",indentation, parsedObj->data[i].key, *parsedObj->data[i].intValue);
+            printf("%s\"%s\" : %d",indentation, parsedObj->data[i].key, *parsedObj->data[i].objValue);
             if (i + 1 < dataCount){
                 printf(",\n");
             }else{
                 printf("\n");
             }
         }else if(parsedObj->data[i].type == BOOL){
-            if(*parsedObj->data[i].intValue == 1){
+            if(*(int*)parsedObj->data[i].objValue->value == 1){
                 printf("%s\"%s\" : true",indentation, parsedObj->data[i].key);
             }
-            else if (*parsedObj->data[i].intValue == 0){
+            else if (*(int*)parsedObj->data[i].objValue->value == 0){
                 printf("%s\"%s\" : false",indentation, parsedObj->data[i].key);
             }else
             {
-                printf("ERROR: unknown bool value %d", parsedObj->data[i].intValue);
+                printf("ERROR: unknown bool value %d", parsedObj->data[i].objValue);
             }
             if (i + 1 < dataCount){
                 printf(",\n");
@@ -276,7 +265,7 @@ void printObj(struct JsonObj* parsedObj, int depth){
                 printf("\n");
             }
         }else if (parsedObj->data[i].type == STRING) {
-            printf("%s\"%s\" : \"%s\"", indentation, parsedObj->data[i].key, parsedObj->data[i].stringValue);
+            printf("%s\"%s\" : \"%s\"", indentation, parsedObj->data[i].key, parsedObj->data[i].objValue);
             if (i + 1 < dataCount){
                 printf(",\n");
             }else{
@@ -531,11 +520,9 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                         for (int j = 0; j < parsedObj->dataCount; j++)
                         {
                             dataP[j].type =  oldDataP[j].type;
-                            dataP[j].key =  oldDataP[j].key;
-                            dataP[j].stringValue  = oldDataP[j].stringValue; 
+                            dataP[j].key =  oldDataP[j].key; 
                             dataP[j].objValue  = oldDataP[j].objValue; 
                             dataP[j].arrayValue  = oldDataP[j].arrayValue;
-                            dataP[j].intValue  = oldDataP[j].intValue;
                         }
                         free(oldDataP);
                         parsedObj->dataCapacity = newCapacity;
@@ -858,8 +845,7 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 valueP->valueType == STRING;
 
                 parsedObj->data[parsedObj->dataCount - 1].type = STRING;
-                parsedObj->data[parsedObj->dataCount - 1].stringValue = valueP;
-                parsedObj->data[parsedObj->dataCount - 1].objValue = 0;
+                parsedObj->data[parsedObj->dataCount - 1].objValue = valueP;
 
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
                 i = result.end;
@@ -915,7 +901,10 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 struct JsonObj* currentObj = objs[depth];
                 int* intP = malloc(sizeof(int));
                 intP[0] = parsedNumber;
-                currentObj->data[currentObj->dataCount-1].intValue = intP;
+                struct JsonValue* valueP = malloc(sizeof(struct JsonValue));
+                valueP->value = intP;
+                valueP->valueType = INT;
+                currentObj->data[currentObj->dataCount-1].objValue = valueP;
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
                 i = numEnd-1;
             } else if(currentChar == 't'){
@@ -929,7 +918,10 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 struct JsonObj* currentObj = objs[depth];
                 int* intP = malloc(sizeof(int));
                 intP[0] = 1;
-                currentObj->data[currentObj->dataCount-1].intValue = intP;
+                struct JsonValue* valueP = malloc(sizeof(struct JsonValue));
+                valueP->value = intP;
+                valueP->valueType = BOOL;
+                currentObj->data[currentObj->dataCount-1].objValue = valueP;
                 currentObj->data[currentObj->dataCount-1].type = BOOL;
                 //printf("Found boolean true\n");
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
@@ -947,13 +939,15 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                 struct JsonObj* currentObj = objs[depth];
                 int* intP = malloc(sizeof(int));
                 intP[0] = 0;
-                currentObj->data[currentObj->dataCount-1].intValue = intP;
+                struct JsonValue* valueP = malloc(sizeof(struct JsonValue));
+                valueP->value = intP;
+                valueP->valueType = BOOL;
+                currentObj->data[currentObj->dataCount-1].objValue = valueP;
                 currentObj->data[currentObj->dataCount-1].type = BOOL;
                 //printf("Found boolean false\n");
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
                 i = i+4;
             }else if(currentChar == 'n'){
-                objs[depth]->data[objs[depth]->dataCount-1].type = NULL_T;
                 int hasU = json[i+1] != '\0' && json[i+1] == 'u';
                 int hasL = json[i+2] != '\0' && json[i+2] == 'l';
                 int hasL2 = json[i+3] != '\0' && json[i+3] == 'l';
@@ -961,7 +955,13 @@ int parseObj(char* json, struct JsonObj* result, int start, int end){
                     printf("Error: unexpected null fragmet\n");
                     return 1;
                 }
-                //printf("Found null\n");
+                struct JsonValue* valueP = malloc(sizeof(struct JsonValue));
+                valueP->value = NULL;
+                valueP->valueType = NULL_T;
+                struct JsonObj* currentObj = objs[depth];
+                currentObj->data[currentObj->dataCount-1].objValue = valueP;
+                currentObj->data[currentObj->dataCount-1].type = NULL_T;
+                
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
                 i = i+3;
             } else {
