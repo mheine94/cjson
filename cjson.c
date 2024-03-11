@@ -605,12 +605,20 @@ int stringEquals(char* a, char* b){
     return 1;
 }
 
-void put(struct JsonObj* jsonObj, char* key, struct JsonValue* value){
-
+int get(struct JsonObj* jsonObj, char* key, struct JsonValue** returnValue){
     for(int i =0; i< jsonObj->dataCount; i++){
         if(stringEquals(jsonObj->keyValues[i].key, key) == 1){
-            // todo free value;
-            free(jsonObj->keyValues[i].value);
+            *returnValue = jsonObj->keyValues[i].value;
+            return 0;
+        }
+    }
+    return 1;
+}
+
+void put(struct JsonObj* jsonObj, char* key, struct JsonValue* value){
+    for(int i =0; i< jsonObj->dataCount; i++){
+        if(stringEquals(jsonObj->keyValues[i].key, key) == 1){
+            freeJsonValue(jsonObj->keyValues->value);
             jsonObj->keyValues[i].value = value;
             return;
         }
