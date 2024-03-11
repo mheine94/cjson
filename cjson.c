@@ -285,7 +285,7 @@ void printObjValues(struct JsonObj* jsonObj, enum PrintMode mode, int depth){
         printSpace(mode);
         printf(":");
         printSpace(mode);
-        printValue(jsonObj->keyValues[i].value, mode, depth);
+        printValue(jsonObj->keyValues[i].value, mode, depth + 1);
         
         if (i + 1 < dataCount){
             printf(",");
@@ -333,23 +333,18 @@ void printValue(struct JsonValue* jsonValue, enum PrintMode mode, int depth){
     } else if(jsonValue->valueType == NULL_T){
         printf("null");
     } else if(jsonValue->valueType == ARRAY){
-        printIndent(mode, depth);
         printf("[");
         printNewline(mode);
         printArrayValues(jsonValue->value.arrayValue, mode, depth+1);
         printNewline(mode);
-        printIndent(mode, depth);
+        printIndent(mode, depth-1);
         printf("]");
     } else if(jsonValue->valueType == OBJ){
-        if(depth > 0){
-            printNewline(mode);
-        }
-        printIndent(mode, depth);
         printf("{");
         printNewline(mode);
         printObjValues(jsonValue->value.objValue, mode, depth+1);
         printNewline(mode);
-        printIndent(mode, depth);
+        printIndent(mode, depth-1);
         printf("}");
     }
 }
@@ -901,10 +896,10 @@ int main(){
         freeJsonValue(result.value);
         return result.returnCode;
     }    
-    //print(result.value, PRETTY);    
-    char* jsonString = stringify(result.value);
-    printf("%s", jsonString);
-    free(jsonString);
+    print(result.value, PRETTY);    
+    //char* jsonString = stringify(result.value);
+    //printf("%s", jsonString);
+    //free(jsonString);
     printf("\n");
 
     freeJsonValue(result.value);
