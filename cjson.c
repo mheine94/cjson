@@ -887,6 +887,11 @@ struct ParseValueResult parseValue(char* json, int start, int end){
     return result;
 }
 
+struct ParseValueResult parse(char* jsonString){
+    int len = stringLength(jsonString);
+    return parseValue(jsonString, 0, len);
+}
+
 int main(){
     struct JsonString string;
     string.capacity = 0;
