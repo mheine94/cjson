@@ -806,43 +806,27 @@ struct ParseValueResult parseValue(char* json, int start, int end){
                 result.returnCode = 1;
                 return result;
             }
+        } else{
+            printf("Error: unknown parser state %d\n", parseState);
+                result.returnCode = 1;
+                return result;
         }
     }
     return result;
 }
 
 int main(){
-    char json1[] = "{ \"stringInString\": \"out\\\"in\\\"\" , \"key2\": null, \"key3\": 1234, \"key4\": true,\"key5\": false, \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": {\"subsubkey1\": 12}}}";
-    char json2[] = "{ \"arrayKey\": [\"stringval1\", \"stringval2\"] , \"key2\": 2}";
-    char json3[] = "{ \"numkey\": 123,  \"key6\": { \"subkey1\": \"sval 2\", \"subkey2\": { \"subsubkey1\": \"sval 3\" } } }";
-    char json4[] = "{ \"key\": [ 1, 2, 3] }";
-    char json5[] = "{ \"key\": [ null, null, null] }";  
-    
-    char* jsonP[] = { json1, json2, json3, json4, json5};
-    int bufferSize = 100;
-    char* buffer = malloc(sizeof(char) * bufferSize);
-    char nextChar;
-    int charCount = 0;
-   
-    while(fread(&nextChar, sizeof(char), 1,  stdin) > 0){ 
-        buffer[charCount] = nextChar;
-        charCount++;
-        if(charCount+1 > bufferSize){
-            int newBufferSize = bufferSize * 2;
-            char* newBuffer = malloc(sizeof(char)* newBufferSize);
-            for(int i = 0; i < bufferSize; i++){
-                newBuffer[i] = buffer[i];
-            }
-            free(buffer);
-            buffer = newBuffer;
-            bufferSize = newBufferSize;
-        }
-    }
-    buffer[charCount] = '\0';
+    struct JsonString string;
+    string.capacity = 0;
+    string.length = 0;
 
-    //printf("got json: \"%s\"", buffer);
+    char nextChar;
+    while(fread(&nextChar, sizeof(char), 1,  stdin) > 0){ 
+        writeChar(&string, nextChar);
+    }
+    writeChar(&string, '\0');
     
-    struct ParseValueResult result = parseValue(buffer, 0, charCount);
+    struct ParseValueResult result = parseValue(string.string, 0, string.length);
     if(result.returnCode != 0){
         freeObj(result.value->value.objValue);
         free(result.value);
