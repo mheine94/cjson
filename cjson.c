@@ -19,31 +19,37 @@ enum ParserState {
     STATE_FIND_COMMA_OR_OBJ_END,
     STATE_FIND_CLOSING_BRACKET
 };
-
+union ValuePointers {
+    void* voidValue;
+    int* intValue;
+    int* boolValue;
+    char* stringValue;
+    struct JsonObj* objValue;
+    struct JsonArray* arrayValue;
+};
+struct JsonValue {
+    enum ValueType valueType;
+    union ValuePointers value;
+};
+struct JsonArray {
+    int length;
+    int capacity;
+    struct JsonValue* values;
+};
+struct JsonKeyValue {
+    char* key;
+    struct JsonValue* objValue;
+};
 struct JsonObj {
-    struct JsonValue {
-        enum ValueType valueType;
-        union ValuePointers {
-            void* voidValue;
-            int* intValue;
-            int* boolValue;
-            char* stringValue;
-            struct JsonObj* objValue;
-            struct JsonArray* arrayValue;
-        } value;
-    };
-    struct JsonArray {
-        int length;
-        int capacity;
-        struct JsonValue* values;
-    };
-    struct JsonKeyValue {
-        char* key;
-        struct JsonValue* objValue;
-    };
     int dataCount;
     int dataCapacity;
     struct JsonKeyValue* data;
+};
+
+struct JsonString {
+    char* string;
+    int length;
+    int capacity;
 };
 
 int billigPow(int exp, int base){
@@ -112,12 +118,6 @@ void freeObj(struct JsonObj* parsedObj){
         }
     }
 }
-
-struct JsonString {
-    char* string;
-    int length;
-    int capacity;
-};
 
 void writeChar(struct JsonString* jsonString, char c){
     if(jsonString->capacity == 0){
@@ -509,6 +509,72 @@ struct ParseValueResult parseArray(char* json, int start){
     return result;
 }
 
+int stringLength(char* string){
+    int length = 0;
+    for(int i = 0; string[i] != '\0'; i++){
+        length++;
+    }
+    return length;
+}
+
+int stringEquals(char* a, char* b){
+    int aLen = stringLength(a);
+    int bLen = stringLength(b);
+
+    if(aLen != bLen){
+        return 0;
+    }
+
+    for(int i = 0; i < aLen; i++){
+        if(a[i] != b[i]){
+            return 0;
+        }
+    }
+    return 1;
+}
+
+void put(struct JsonObj* jsonObj, char* key, struct JsonValue* value){
+
+    for(int i =0; i< jsonObj->dataCount; i++){
+        if(stringEquals(jsonObj->data[i].key, key) == 1){
+            // todo free value;
+            free(jsonObj->data[i].objValue);
+            jsonObj->data[i].objValue = value;
+            return;
+        }
+    }
+
+    if (jsonObj->dataCount + 1 > jsonObj->dataCapacity)
+    {
+        if (jsonObj->dataCount > 0)
+        {
+            struct JsonKeyValue *oldDataP = jsonObj->data;
+            int newCapacity = jsonObj->dataCapacity * 2;
+            struct JsonKeyValue *dataP = malloc(newCapacity * sizeof(struct JsonKeyValue));
+            jsonObj->data = dataP;
+            //printf("Copying %d elements\n", parsedObj->dataCount);
+            for (int j = 0; j < jsonObj->dataCount; j++)
+            {
+                dataP[j].key =  oldDataP[j].key; 
+                dataP[j].objValue  = oldDataP[j].objValue; 
+            }
+            free(oldDataP);
+            jsonObj->dataCapacity = newCapacity;
+        }
+        else
+        {
+            //printf("Creating initial data array of 4\n");
+            struct JsonKeyValue *dataP = malloc(4 * sizeof(struct JsonKeyValue));
+            jsonObj->data = dataP;
+            jsonObj->dataCapacity = 4;
+            jsonObj->dataCount = 0;
+        }
+    }
+    jsonObj->data[jsonObj->dataCount].key = key;
+    jsonObj->data[jsonObj->dataCount].objValue = value;
+    jsonObj->dataCount+=1;
+}
+
 struct ParseValueResult parseValue(char* json, int start, int end){
     struct ParseValueResult result;
     result.returnCode = 0;
@@ -521,72 +587,19 @@ struct ParseValueResult parseValue(char* json, int start, int end){
     for(int i = start;  i < end && json[i] != '\0'; i++){
         char currentChar = json[i];
         if(parseState == STATE_PARSE_NAME){
-            int nameStart = -1;
-            int nameEnd = -1;
 
-            for (int j = i;json[j] != '\0' && nameEnd == -1; j++){
-                if (json[j] == ' '){
-                    // ignore
-                }
-                else if (json[j] == '"' && nameStart == -1){
-                    // parse name
-                    nameStart = j;
-                }
-                else if (json[j] == '"'){
-                    nameEnd = j;
-                    //printf("Found name from %d to %d \n", nameStart, nameEnd);
-                }
-            }
-            if (nameStart != -1 && nameEnd != -1){
-                char *jsonP = json;
-                int size = nameEnd - nameStart;
-                char *mem = malloc(sizeof(char) * (size));
+            struct ParseStringResult parseStringResult = parseString(json, i, end);
 
-                cpChars(nameStart + 1, nameEnd, jsonP, mem);
-                mem[size - 1] = '\0';
-                //printf("Found name: %s\n", mem);
-             
-                struct JsonObj *parsedObj = value->value.objValue;
-                if (parsedObj->dataCount + 1 > parsedObj->dataCapacity)
-                {
-                    if (parsedObj->dataCount > 0)
-                    {
-                        struct JsonKeyValue *oldDataP = parsedObj->data;
-                        int newCapacity = parsedObj->dataCapacity * 2;
-                        struct JsonKeyValue *dataP = malloc(newCapacity * sizeof(struct JsonKeyValue));
-                        parsedObj->data = dataP;
-                        //printf("Copying %d elements\n", parsedObj->dataCount);
-                        for (int j = 0; j < parsedObj->dataCount; j++)
-                        {
-                            dataP[j].key =  oldDataP[j].key; 
-                            dataP[j].objValue  = oldDataP[j].objValue; 
-                        }
-                        free(oldDataP);
-                        parsedObj->dataCapacity = newCapacity;
-                    }
-                    else
-                    {
-                        //printf("Creating initial data array of 4\n");
-                        struct JsonKeyValue *dataP = malloc(4 * sizeof(struct JsonKeyValue));
-                        parsedObj->data = dataP;
-                        parsedObj->dataCapacity = 4;
-                        parsedObj->dataCount = 0;
-                    }
-                }
-                parsedObj->data[parsedObj->dataCount].key = mem;
-                parsedObj->dataCount+=1;
-                parseState = STATE_FIND_COLON;
-                i = nameEnd;
-            }
-            else
-            {
-                printf("Error: did not find closing \" of \" at i=%d\n", i);
-                result.returnCode = 1;
+            if(parseStringResult.returnCode != 0){
+                result.returnCode = parseStringResult.returnCode;
                 return result;
             }
-        }
-        else if (parseState == STATE_FIND_COLON)
-        {
+
+            put(value->value.objValue, parseStringResult.string, NULL);
+
+            parseState = STATE_FIND_COLON;
+            i = parseStringResult.end;
+       } else if (parseState == STATE_FIND_COLON){
             if(currentChar == ' '){
                 //ignore
             } else if(currentChar == ':'){
