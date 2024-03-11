@@ -400,18 +400,19 @@ struct ParseStringResult parseString(char* json, int start, int end){
     }
 }
 
-struct ParseIntResult {
-    int parsedNumber;
+struct ParseValueResult {
+    struct JsonValue* value;
     int returnCode;
     int end;
 };
-
-struct ParseIntResult parseInt(char* json, int start, int end){
+struct ParseValueResult parseInt(char* json, int start, int end){
+    struct ParseValueResult result;
+    result.value = malloc(sizeof(struct JsonValue));
     //printf("Parsing number at %d\n", start);
     int numEnd = -1;
     for (int j = start; j < end && numEnd == -1; j++)
     {
-        if (json[j] < '0' || json[j] > '9')
+        if ((json[j] < '0' || json[j] > '9') && json[j] != '.')
         {
             numEnd = j;
         }
@@ -422,18 +423,17 @@ struct ParseIntResult parseInt(char* json, int start, int end){
         numEnd = end;
     }
     //printf("Number ends at %d\n", numEnd);
-    char string[numEnd - start + 1];
-    char *stringP = string;
+    char* stringP = malloc(sizeof(char) * numEnd - start + 1);
     char *jsonP = json;
     cpChars(start, numEnd, jsonP, stringP);
-    string[numEnd - start] = '\0';
+    stringP[numEnd - start] = '\0';
     //printf("Found number: %s\n", string);
     int parsedNumber = 0;
     int digit = 0;
     int numLen = numEnd - start;
     for (int j = 0; j < numLen; j++)
     {
-        char curr = string[numLen - 1 - j];
+        char curr = stringP[numLen - 1 - j];
         if (curr == '0')
         {
             digit = 0;
@@ -473,23 +473,30 @@ struct ParseIntResult parseInt(char* json, int start, int end){
         else if (curr == '9')
         {
             digit = 9;
+        }else if(curr == '.'){
+            //todo parse float
+            result.value->value.stringValue = stringP;
+            result.value->valueType = STRING;
+            result.returnCode = 0;
+            result.end = numEnd - 1;
+            return result;
         }
 
         parsedNumber += billigPow(j, 10) * digit;
     }
     //printf("Parsed number is: %d\n", parsedNumber);
-    struct ParseIntResult result;
-    result.parsedNumber = parsedNumber;
+    int* intP = malloc(sizeof(int));
+    *intP = parsedNumber;
     result.end = numEnd-1;
+
+    result.value->valueType = INT;
+    result.value->value.intValue = intP;
     result.returnCode = 0;
+    free(stringP);
     return result;
 }
 
-struct ParseValueResult {
-    struct JsonValue* value;
-    int returnCode;
-    int end;
-};
+
 
 void push(struct JsonArray* array, struct JsonValue* value){
     if(array->capacity == 0){
@@ -659,7 +666,6 @@ struct ParseValueResult parseValue(char* json, int start, int end){
                 result.returnCode = parseStringResult.returnCode;
                 return result;
             }
-
             put(value->value.objValue, parseStringResult.string, NULL);
 
             parseState = STATE_FIND_COLON;
@@ -676,8 +682,7 @@ struct ParseValueResult parseValue(char* json, int start, int end){
                 return result;
             }
         }
-        else if (parseState == STATE_PARSE_VALUE)
-        {
+        else if (parseState == STATE_PARSE_VALUE){
             if(currentChar == ' '){
                 //ignore
             } else if(currentChar == '{'){
@@ -744,24 +749,18 @@ struct ParseValueResult parseValue(char* json, int start, int end){
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
                 i = parseStringResult.end;
             } else if(currentChar >= '0' && currentChar <= '9'){
-                struct ParseIntResult parseIntResult = parseInt(json, i, end);
+                struct ParseValueResult parseIntResult = parseInt(json, i, end);
                 if(parseIntResult.returnCode != 0){
                     result.returnCode = parseIntResult.returnCode;
                     return result;
                 }
                 
-                int* intP = malloc(sizeof(int));
-                intP[0] = parseIntResult.parsedNumber;
-                
                 if(value->valueType == OBJ){
-                    struct JsonValue* valueP = malloc(sizeof(struct JsonValue));
-                    valueP->value.intValue = intP;
-                    valueP->valueType = INT;
                     struct JsonObj* currentObj = value->value.objValue;
-                    currentObj->keyValues[currentObj->dataCount-1].value = valueP;
+                    currentObj->keyValues[currentObj->dataCount-1].value = parseIntResult.value;
                 }else {
-                    value->valueType = INT;
-                    value->value.intValue = intP;
+                    free(value);
+                    result.value = parseIntResult.value;
                     result.end = parseIntResult.end;
                     return result;
                 }
