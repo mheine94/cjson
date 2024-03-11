@@ -1,24 +1,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-const char OBJ = 0;
-const char STRING = 1;
-const char INT = 2;
-const char FLOAT = 3;
-const char ARRAY = 4;
-const char BOOL = 5;
-const char NULL_T = 6;
+enum ValueType {
+    NULL_T = 1,
+    OBJ,
+    ARRAY,
+    STRING,
+    INT,
+    FLOAT,
+    BOOL
+};
 
-const char STATE_FIND_OPENING_BRACKET = 0;
-const char STATE_PARSE_NAME = 1;
-const char STATE_FIND_COLON = 2;
-const char STATE_PARSE_VALUE = 3;
-const char STATE_FIND_COMMA_OR_OBJ_END = 4;
-const char STATE_FIND_CLOSING_BRACKET = 5;
+enum ParserState {
+    STATE_FIND_OPENING_BRACKET = 1,
+    STATE_PARSE_NAME,
+    STATE_FIND_COLON,
+    STATE_PARSE_VALUE,
+    STATE_FIND_COMMA_OR_OBJ_END,
+    STATE_FIND_CLOSING_BRACKET
+};
 
 struct JsonObj {
     struct JsonValue {
-        int valueType;
+        enum ValueType valueType;
         union ValuePointers {
             void* voidValue;
             int* intValue;
@@ -511,7 +515,7 @@ struct ParseValueResult parseValue(char* json, int start, int end){
     struct JsonValue* value = malloc(sizeof(struct JsonValue));
     value->valueType = NULL_T;
     result.value = value;
-
+    
     int parseState = STATE_PARSE_VALUE;
 
     for(int i = start;  i < end && json[i] != '\0'; i++){
