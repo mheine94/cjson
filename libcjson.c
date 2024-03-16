@@ -214,47 +214,11 @@ void writeBool(struct JsonString* jsonString, int boolValue){
 
 
 void writeDouble(struct JsonString* jsonString, double doubleValue){
-    int maxDecimalDigits = 6; 
-    long long integerPart = (long long)doubleValue;
-    long long decimalPart = (long long)((doubleValue - integerPart) * billigPow(maxDecimalDigits, 10));
-
-    struct JsonString tempString = {
-      .capacity = 0, 
-      .length = 0,
-      .string = NULL
-    };
-
-    long long temp = integerPart;
-    do {
-        writeChar(&tempString, (temp % 10) + '0');
-        temp /= 10;
-    } while (temp != 0);
-
-    for (int i = tempString.length ;i <= 0; i --) {
-        writeChar(jsonString, tempString.string[i]);
+    char buf[20];
+    sprintf((char*) &buf, "%lf", doubleValue);
+    for(int i =0; buf[i] !=  '\0'; i++){
+        writeChar(jsonString, buf[i]);
     }
-
-    if(tempString.length > 0){
-        free(tempString.string);
-    }
-
-    writeChar(jsonString, '.');
-   
-    int decimalDigitsWritten = 0;
-    temp = decimalPart;
-    do {
-        writeChar(jsonString, (temp % 10) + '0');
-        temp /= 10;
-        decimalDigitsWritten++;
-    } while (temp != 0);
-
-    // If the decimal part has fewer than 6 digits, add leading zeros
-    while (decimalDigitsWritten < maxDecimalDigits) {
-        writeChar(jsonString, '0');
-        decimalDigitsWritten++;
-    }
-
-    writeChar(jsonString, '\0');
 }
 
 
