@@ -235,6 +235,9 @@ void writeInt(struct JsonString* jsonString, int intValue){
             temp -= t * billigPow(i, 10);
         }
      }
+     if(foundStart == 0){
+        writeChar(jsonString, '0');
+     }
 }
 void writeValue(struct JsonString* jsonString, struct JsonValue* jsonValue){
     int valueType = jsonValue->valueType;
@@ -1095,7 +1098,7 @@ struct ParseValueResult parseValue(char* json, int start, int end){
 
 struct ParseValueResult parse(char* jsonString){
     int len = stringLength(jsonString);
-    return parseValue(jsonString, 0, len-1);
+    return parseValue(jsonString, 0, len);
 }
 
 JSON* parsePublic(char* jsonString){
