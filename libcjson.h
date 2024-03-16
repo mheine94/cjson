@@ -20,6 +20,7 @@ typedef struct {
     void (*print)(JSON*, enum PrintMode);
     JSON* (*newObj)();
     JSON* (*newIntValue)(int value);
+    JSON* (*newFloatValue)(double value);
     JSON* (*newStringValue)(char* value);
     JSON* (*newBooleanValue)(int boolean);
     JSON* (*newArrayValue)();

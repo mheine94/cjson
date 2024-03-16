@@ -13,6 +13,7 @@ enum ParserState {
 union ValuePointers {
     void* voidValue;
     int* intValue;
+    double* doubleValue;
     int* boolValue;
     char* stringValue;
     struct JsonObj* objValue;
@@ -211,6 +212,52 @@ void writeBool(struct JsonString* jsonString, int boolValue){
     }
 }
 
+
+void writeDouble(struct JsonString* jsonString, double doubleValue){
+    int maxDecimalDigits = 6; 
+    long long integerPart = (long long)doubleValue;
+    long long decimalPart = (long long)((doubleValue - integerPart) * billigPow(maxDecimalDigits, 10));
+
+    struct JsonString tempString = {
+      .capacity = 0, 
+      .length = 0,
+      .string = NULL
+    };
+
+    long long temp = integerPart;
+    do {
+        writeChar(&tempString, (temp % 10) + '0');
+        temp /= 10;
+    } while (temp != 0);
+
+    for (int i = tempString.length ;i <= 0; i --) {
+        writeChar(jsonString, tempString.string[i]);
+    }
+
+    if(tempString.length > 0){
+        free(tempString.string);
+    }
+
+    writeChar(jsonString, '.');
+   
+    int decimalDigitsWritten = 0;
+    temp = decimalPart;
+    do {
+        writeChar(jsonString, (temp % 10) + '0');
+        temp /= 10;
+        decimalDigitsWritten++;
+    } while (temp != 0);
+
+    // If the decimal part has fewer than 6 digits, add leading zeros
+    while (decimalDigitsWritten < maxDecimalDigits) {
+        writeChar(jsonString, '0');
+        decimalDigitsWritten++;
+    }
+
+    writeChar(jsonString, '\0');
+}
+
+
 void writeInt(struct JsonString* jsonString, int intValue){
      int temp = intValue;
      int maxIntDitgits = 10;
@@ -226,21 +273,23 @@ void writeInt(struct JsonString* jsonString, int intValue){
      }
 }
 void writeValue(struct JsonString* jsonString, struct JsonValue* jsonValue){
-   int valueType = jsonValue->valueType;
-   if(valueType == CJSON_OBJ){
+    int valueType = jsonValue->valueType;
+    if(valueType == CJSON_OBJ){
         //printf("write obj\n");
         writeObj(jsonString, jsonValue->value.objValue);
-   } else if(valueType == CJSON_STRING){
+    } else if(valueType == CJSON_STRING){
         //printf("write string\n");
         writeChar(jsonString, '"');
         writeString(jsonString, jsonValue->value.stringValue);
         writeChar(jsonString, '"');
-   } else if(valueType == CJSON_BOOL){
+    } else if(valueType == CJSON_BOOL){
         //printf("write bool\n");
         writeBool(jsonString, *jsonValue->value.boolValue);
     } else if(valueType == CJSON_INT){
         //printf("write int\n");
         writeInt(jsonString, *jsonValue->value.boolValue);
+   } else if(valueType == CJSON_FLOAT){
+        writeDouble(jsonString, *jsonValue->value.doubleValue);
    } else if(valueType == CJSON_NULL){
         //printf("write null\n");
         char nullString[] = "null";
@@ -355,6 +404,8 @@ void printValue(struct JsonValue* jsonValue, enum PrintMode mode, int depth){
         printBool(*jsonValue->value.boolValue);
     } else if(jsonValue->valueType == CJSON_INT){
         printf("%d", *jsonValue->value.intValue);
+    }else if(jsonValue->valueType == CJSON_FLOAT){
+        printf("%lf", *jsonValue->value.doubleValue);
     } else if(jsonValue->valueType == CJSON_STRING){
         printf("\"%s\"", jsonValue->value.stringValue);
     } else if(jsonValue->valueType == CJSON_NULL){
@@ -382,13 +433,14 @@ void print(struct JsonValue* jsonValue, enum PrintMode mode){
 
 void freeJsonValue(struct JsonValue* jsonValue);
 void freeJsonArray(struct JsonArray* array);
+void freeJsonValueInArray(struct JsonValue* jsonValue, int i);
 
 void freeJsonObj(struct JsonObj* parsedObj){ 
     int dataCount = parsedObj->dataCount;
     for (int i = 0; i < dataCount; i++)
     {
         free(parsedObj->keyValues[i].key);
-        freeJsonValue(parsedObj->keyValues[i].value);
+        freeJsonValueInArray(parsedObj->keyValues[i].value, i);
     }
     free(parsedObj->keyValues);
     free(parsedObj);
@@ -418,6 +470,9 @@ void freeJsonValueInArray(struct JsonValue* jsonValue, int i){
     case CJSON_INT:
         //printf("free int\n");
         free(jsonValue->value.intValue);
+        break;
+    case CJSON_FLOAT:
+        free(jsonValue->value.doubleValue);
         break;
     case CJSON_STRING:
         //printf("free string\n");
@@ -455,18 +510,26 @@ void freeJsonValue(struct JsonValue* jsonValue){
         break;
     case CJSON_NULL:
         //printf("free null\n");
+        free(jsonValue);
         break;
     case CJSON_BOOL:
         //printf("free bool\n");
         free(jsonValue->value.intValue);
+        free(jsonValue);
         break;
     case CJSON_INT:
         //printf("free int\n");
         free(jsonValue->value.intValue);
+        free(jsonValue);
+        break;
+    case CJSON_FLOAT:
+        free(jsonValue->value.doubleValue);
+        free(jsonValue);
         break;
     case CJSON_STRING:
         //printf("free string\n");
         free(jsonValue->value.stringValue);
+        free(jsonValue);
         break;
     default:
         printf("free unknwown\n");
@@ -536,6 +599,48 @@ struct ParseValueResult {
     int returnCode;
     int end;
 };
+
+struct ParseValueResult parseDouble(const char *str, int start, int end) {
+    struct ParseValueResult parseResult;
+    parseResult.value = malloc(sizeof(struct JsonValue));
+    parseResult.end = end;
+    parseResult.returnCode = 0;
+
+    double result = 0.0;
+    int decimalPointIndex = -1;
+    int digitCount = 0;
+    //printf("parse float: ");
+    for (int i = start; i < end; i++) {
+        //printf("%c\n", str[i]);
+        if (str[i] == '.') {
+            decimalPointIndex = i;
+            continue;
+        }
+
+        if (str[i] >= '0' && str[i] <= '9') {
+            double digitValue = str[i] - '0';
+            //printf("current ditig: %lf\n", digitValue);
+            if (decimalPointIndex != -1) {
+                result += digitValue / (billigPow(digitCount+1, 10));
+                digitCount++;
+            } else {
+                result = result * 10.0 + digitValue;
+            }
+            //printf("current val: %lf\n", result);
+        } else {
+            parseResult.end = i-1;
+            break;
+        }
+    }
+    //printf("parsed: %lf\n", result);
+
+    parseResult.value->value.doubleValue = malloc(sizeof(double));
+    *parseResult.value->value.doubleValue = result;
+    parseResult.value->valueType = CJSON_FLOAT;
+    return parseResult;
+}
+
+
 struct ParseValueResult parseInt(char* json, int start, int end){
     struct ParseValueResult result;
     result.value = malloc(sizeof(struct JsonValue));
@@ -543,7 +648,8 @@ struct ParseValueResult parseInt(char* json, int start, int end){
     int numEnd = -1;
     for (int j = start; j < end && numEnd == -1; j++)
     {
-        if ((json[j] < '0' || json[j] > '9') && json[j] != '.')
+        //printf("%c", &json[j]);
+        if (!(json[j] >= '0' && json[j] <= '9') && json[j] != '.')
         {
             numEnd = j;
         }
@@ -558,7 +664,7 @@ struct ParseValueResult parseInt(char* json, int start, int end){
     char *jsonP = json;
     cpChars(start, numEnd, jsonP, stringP);
     stringP[numEnd - start] = '\0';
-    //printf("Found number: %s\n", string);
+    //printf("Found number: %s\n", stringP);
     int parsedNumber = 0;
     int digit = 0;
     int numLen = numEnd - start;
@@ -605,20 +711,17 @@ struct ParseValueResult parseInt(char* json, int start, int end){
         {
             digit = 9;
         }else if(curr == '.'){
-            //todo parse float
-            result.value->value.stringValue = stringP;
-            result.value->valueType = CJSON_STRING;
-            result.returnCode = 0;
-            result.end = numEnd - 1;
-            return result;
+            free(stringP);
+            return parseDouble(json, start, end);
         }
 
         parsedNumber += billigPow(j, 10) * digit;
     }
-    //printf("Parsed number is: %d\n", parsedNumber);
+    //printf("numlen: %d\n", numLen);
+    //printf("Parsed number from: %.*s\n", numLen, &json[start]);
     int* intP = malloc(sizeof(int));
     *intP = parsedNumber;
-    result.end = numEnd-1;
+    result.end = start + numLen -1;
 
     result.value->valueType = CJSON_INT;
     result.value->value.intValue = intP;
@@ -912,6 +1015,9 @@ struct ParseValueResult parseValue(char* json, int start, int end){
                 }
 
                 parseState = STATE_FIND_COMMA_OR_OBJ_END;
+                //printf("end: %d\n", parseIntResult.end);
+                //printf("parsed num from '%.*s'\n", parseIntResult.end-i+1, &json[i]);
+                //printf("%.*s\n", 1, &json[parseIntResult.end]);
                 i = parseIntResult.end;
             } else if(currentChar == 't'){
                 int hasR = json[i+1] != '\0' && json[i+1] == 'r';
@@ -1085,6 +1191,16 @@ JSON* newStringValue(char* value){
     return (JSON*) jsonValue;
 }
 
+JSON* newFloatValue(double value){
+    struct JsonValue* jsonValue = malloc(sizeof(struct JsonValue));
+    jsonValue->valueType = CJSON_FLOAT;
+    jsonValue->value.doubleValue = malloc(sizeof(double));
+    *jsonValue->value.doubleValue = value;
+    
+    return (JSON*) jsonValue;
+}
+
+
 JSON* newBoolValue(int value){
     struct JsonValue* jsonValue = malloc(sizeof(struct JsonValue));
     jsonValue->valueType = CJSON_BOOL;
@@ -1137,7 +1253,6 @@ JSON* parseStdIn(){
         writeChar(&string, nextChar);
     }
     string.string[string.length] = '\0';
-    
     struct ParseValueResult result = parseValue(string.string, 0, string.length);
     if(result.returnCode != 0){
         printf("Err\n");
@@ -1163,6 +1278,7 @@ const ModuleFunctions CJSON = {
     .newBooleanValue = newBoolValue,
     .newArrayValue = newArrayValue,
     .newNullValue = newNullValue,
+    .newFloatValue = newFloatValue,
     .escape = escapeString,
     .unEscape = unEscapeString,
     .arrayPush = arrayAddValue,
