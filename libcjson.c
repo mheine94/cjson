@@ -97,7 +97,82 @@ void writeChar(struct JsonString* jsonString, char c){
     jsonString->length++;
     //printf("%c", c);
 }
+void writeEscapedChar(struct JsonString* string, char c){
+    if(c == '\n'){
+            writeChar(string, '\\');
+            writeChar(string,'n');
+        } else if(c == '\r'){
+            writeChar(string, '\\');
+            writeChar(string,'r');
+        } else if(c == '\f'){
+            writeChar(string, '\\');
+            writeChar(string,'f');
+        } else if(c == '\b'){
+            writeChar(string, '\\');
+            writeChar(string,'b');
+        }else if(c == '\t'){
+            writeChar(string, '\\');
+            writeChar(string,'t');
+        }else if(c == '\\'){
+            writeChar(string, '\\');
+            writeChar(string, '\\');
+        }else if(c == '"'){
+            writeChar(string, '\\');
+            writeChar(string, '"');
+        } else{
+            writeChar(string , c);
+        }
+}
 
+
+char* escapeString(char* input){
+    struct JsonString string = {
+        .capacity = 0,
+        .length = 0
+    };
+    for(int i = 0; input[i] != '\0'; i++){
+        char nextChar = input[i];
+        writeEscapedChar(&string, nextChar);
+    }
+    writeChar(&string, '\0');
+    return string.string;
+}
+
+char* unEscapeString(char* input){
+    struct JsonString string = {
+        .capacity = 0,
+        .length = 0
+    };
+    for(int i = 0; input[i] != '\0'; i++){
+        char nextChar = input[i];
+        if(nextChar == '\\' && nextChar == '\n'){
+            writeChar(&string,'\n');
+        } else if(nextChar == '\\' && nextChar == '\r'){
+            writeChar(&string,'\r');
+        } else if(nextChar == '\\' && nextChar == '\f'){
+            writeChar(&string,'\f');
+        } else if(nextChar == '\\' && nextChar == '\b'){
+            writeChar(&string,'\b');
+        }else if(nextChar == '\\' && nextChar == '\t'){
+            writeChar(&string,'\t');
+        }else if(nextChar == '\\' && nextChar == '\\'){
+            writeChar(&string, '\\');
+        }else if(nextChar == '\\' && nextChar == '"'){
+            writeChar(&string, '"');
+        }else{
+            writeChar(&string, nextChar);
+        }
+    }
+    writeChar(&string, '\0');
+    return string.string;
+}
+
+
+void writeStringEscaped(struct JsonString* jsonString, char* string){
+    for(int i =0; string[i] != '\0'; i++){
+        writeEscapedChar(jsonString, string[i]);
+    }
+}
 void writeString(struct JsonString* jsonString, char* string){
     for(int i =0; string[i] != '\0'; i++){
         writeChar(jsonString, string[i]);
@@ -116,6 +191,7 @@ void writeObj(struct JsonString* jsonString, struct JsonObj* parsedObj){
     }
     writeChar(jsonString, '}'); 
 }
+
 
 char* stringify(struct JsonValue* value){
     struct JsonString result;
@@ -982,10 +1058,73 @@ JSON* newIntValue(int value){
     return (JSON*) val;
 }
 
-void objSet(JSON* obj, char* key, JSON* value){
+void objSet(JSON* obj, char key[], JSON* value){
     struct JsonValue* jsonValue = (struct JsonValue*) obj;
     struct JsonObj* jsonObj = jsonValue->value.objValue;
-    put(jsonObj, key, (struct JsonValue*) value);
+    int len = stringLength(key);
+    char * keyP = malloc(sizeof(char) * (len+1));
+    cpChars(0, len, key, keyP);
+    keyP[len] = '\0';
+
+    put(jsonObj, keyP, (struct JsonValue*) value);
+}
+
+JSON* objGet(JSON* obj, char key[]){
+    struct JsonValue* jsonValue = (struct JsonValue*) obj;
+    struct JsonObj* jsonObj = jsonValue->value.objValue;
+    struct JsonValue* valueP = NULL;
+    get(jsonObj, key, &valueP);
+    
+    return (JSON*) valueP;
+}
+JSON* newStringValue(char* value){
+    struct JsonValue* jsonValue = malloc(sizeof(struct JsonValue));
+    jsonValue->valueType = CJSON_STRING;
+    jsonValue->value.stringValue = escapeString(value);
+    
+    return (JSON*) jsonValue;
+}
+
+JSON* newBoolValue(int value){
+    struct JsonValue* jsonValue = malloc(sizeof(struct JsonValue));
+    jsonValue->valueType = CJSON_BOOL;
+    jsonValue->value.boolValue = malloc(sizeof(int));
+    *jsonValue->value.boolValue = value;
+    
+    return (JSON*) jsonValue;
+}
+
+JSON* newArrayValue(){
+    struct JsonValue* jsonValue = malloc(sizeof(struct JsonValue));
+    jsonValue->valueType = CJSON_ARRAY;
+    jsonValue->value.arrayValue = malloc(sizeof(struct JsonArray));
+    jsonValue->value.arrayValue->capacity = 0;
+    jsonValue->value.arrayValue->length = 0;
+    
+    return (JSON*) jsonValue;
+}
+
+JSON* newNullValue(){
+    struct JsonValue* jsonValue = malloc(sizeof(struct JsonValue));
+    jsonValue->valueType = CJSON_NULL;
+    jsonValue->value.voidValue = NULL;
+
+    return (JSON*) jsonValue;
+}
+
+void arrayAddValue(JSON* array, JSON* value){
+    struct JsonValue* jsonValue = (struct JsonValue *) array;
+    push(jsonValue->value.arrayValue, (struct JsonValue*) value); 
+}
+
+int arrayLen(JSON* array){
+    struct JsonValue* jsonValue = (struct JsonValue *) array;
+    return jsonValue->value.arrayValue->length;
+}
+
+enum ValueType getType(JSON* json){
+    struct JsonValue* jsonValue = (struct JsonValue *) json;
+    return jsonValue->valueType;
 }
 
 JSON* parseStdIn(){
@@ -1020,7 +1159,17 @@ const ModuleFunctions CJSON = {
     .print = printPublic,
     .newObj = newObj,
     .newIntValue = newIntValue,
+    .newStringValue = newStringValue,
+    .newBooleanValue = newBoolValue,
+    .newArrayValue = newArrayValue,
+    .newNullValue = newNullValue,
+    .escape = escapeString,
+    .unEscape = unEscapeString,
+    .arrayPush = arrayAddValue,
+    .arrayLen = arrayLen, 
     .objSet = objSet,
+    .objGet = objGet,
+    .getType = getType,
     .parseStdIn = parseStdIn,
     .free = freePublic
 };

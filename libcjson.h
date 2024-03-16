@@ -24,12 +24,14 @@ typedef struct {
     JSON* (*newBooleanValue)(int boolean);
     JSON* (*newArrayValue)();
     JSON* (*newNullValue)();
-    void (*arrayPush)(JSON* value);
+    void (*arrayPush)(JSON* array, JSON* value);
     int (*arrayLen)(JSON* array);
     JSON* (*arrayGet)(JSON* array, int i);
     void (*arraySet)(JSON* array, JSON* value, int i);
-    void (*objGet)(char* key);
+    JSON* (*objGet)(JSON* obj, char* key);
     void (*objSet)(JSON* obj, char* key, JSON* value);
+    char* (*escape)(char* string);
+    char* (*unEscape)(char* string);
     enum ValueType (*getType)(JSON* json);
     JSON* (*parseStdIn)();
     void (*free)(JSON* json);
